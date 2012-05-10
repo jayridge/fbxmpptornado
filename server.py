@@ -7,6 +7,8 @@ import tornado.web
 from tornado.escape import utf8
 import settings
 import logging
+import functools
+from lxml import etree
 import simplejson as json
 from lib.fbxmpp import FacebookXMPP
 
@@ -47,8 +49,20 @@ class TestHandler(BaseHandler,
         xmpp = FacebookXMPP(self.settings["facebook_api_key"],
                             self.settings["facebook_secret"],
                             user['access_token'])
-        xmpp.connect()
+        xmpp.connect(callback=functools.partial(self._on_ready, xmpp=xmpp))
+
+    def _on_ready(self, xmpp):
+        xmpp.get_roster(callback=functools.partial(self._on_roster, xmpp=xmpp))
+
+    def _on_roster(self, root, xmpp):
+        to = '-500126071@chat.facebook.com'
+        message = 'monkey balls'
+        xmpp.send_message(to, message, callback=functools.partial(self._on_send, xmpp=xmpp))
+   
+    def _on_send(self, root, xmpp):
+        print etree.tostring(root)
         self.render("index.tpl")
+    
 
 class FacebookHandler(BaseHandler,
                       tornado.auth.FacebookGraphMixin):
@@ -84,7 +98,6 @@ if __name__ == "__main__":
     tornado.options.parse_command_line()
     logging.getLogger().setLevel(settings.get('logging_level'))
 
-    print tornado.options.options
     app_settings = {
         'facebook_api_key': tornado.options.options.key,
         'facebook_secret': tornado.options.options.secret,
@@ -93,7 +106,6 @@ if __name__ == "__main__":
         'cookie_secret': 'a horse is a horse of course of course',
         'debug': True,
     }
-    print app_settings
     application = tornado.web.Application([
         (r"/", IndexHandler),
         (r"/login", FacebookHandler),
