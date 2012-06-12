@@ -57,12 +57,27 @@ class TestHandler(BaseHandler,
     def _on_roster(self, root, xmpp):
         to = '-500126071@chat.facebook.com'
         message = 'monkey balls'
-        xmpp.send_message(to, message, callback=functools.partial(self._on_send, xmpp=xmpp))
-   
-    def _on_send(self, root, xmpp):
-        print etree.tostring(root)
+        xmpp.send_message(to, message)
+        xmpp.close()
         self.render("index.tpl")
-    
+
+class SendHandler(BaseHandler):
+    @tornado.web.asynchronous
+    def get(self):
+        to = self.get_argument('to')
+        message = self.get_argument('message')
+        access_token = self.get_argument('access_token')
+        xmpp = FacebookXMPP(self.settings["facebook_api_key"],
+                            self.settings["facebook_secret"],
+                            access_token)
+        xmpp.connect(callback=functools.partial(self._on_ready, xmpp=xmpp, to=to, message=message))
+
+    def _on_ready(self, xmpp, to, message):
+        print xmpp, to, message
+        xmpp.send_message(to, message)
+        xmpp.close()
+        self.api_response(message)
+
 
 class FacebookHandler(BaseHandler,
                       tornado.auth.FacebookGraphMixin):
@@ -110,6 +125,7 @@ if __name__ == "__main__":
         (r"/", IndexHandler),
         (r"/login", FacebookHandler),
         (r"/test", TestHandler),
+        (r"/send", SendHandler),
         (r"/stats", StatsHandler),
     ], **app_settings)
     application.listen(tornado.options.options.port)

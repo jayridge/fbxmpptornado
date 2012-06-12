@@ -40,6 +40,7 @@ class FacebookXMPP:
         return str(self.id)
         
     def send_xml(self, xml):
+        xml = utf8(xml)
         logging.debug('> %s' % xml)
         self.stream.write(xml)
     
@@ -50,11 +51,9 @@ class FacebookXMPP:
         self.cb_map[id] = callback
         self.send_xml(xml)
     
-    def send_message(self, to, message, callback):
-        id = self.get_id()
+    def send_message(self, to, message):
         xml = '<message type="chat" from="%s" to="%s" xml:lang="en"><body>%s</body></message>' \
             % (self.jid, to, message)
-        self.cb_map[id] = callback
         self.send_xml(xml)
         
     def connect(self, host='chat.facebook.com', port=5222, callback=None):
@@ -65,10 +64,13 @@ class FacebookXMPP:
         self.stream.set_close_callback(self._on_close)
         self.stream.connect((host, port), self._on_connect)
     
+    def close(self):
+        self.send_xml(self.CLOSE_XML)
+        #self.stream.close()
+
     def _on_close(self):
         self.state = 'CLOSED'
-        logging.error('CLOSE')
-        self.stream.close()
+        logging.info('CLOSED')
         
     def _on_read(self, data):
         self.buffer.write(data)
@@ -77,6 +79,7 @@ class FacebookXMPP:
                 data = self.buffer.getvalue()
                 root = etree.fromstring(data)
                 id = root.xpath('//iq/@id')
+                logging.info("id %r" % id)
                 if id and id[0] in self.cb_map:
                     id = id[0]
                     try:
@@ -91,7 +94,7 @@ class FacebookXMPP:
                     pass
                 self.buffer.truncate(0)
             except:
-                logging.exception("parse failed: %.100r" % self.buffer.getvalue())
+                logging.exception("parse failed: %.200r" % self.buffer.getvalue())
                 pass
                 
     def _on_connect(self):
