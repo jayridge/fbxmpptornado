@@ -65,21 +65,23 @@ class FacebookXMPP:
         self.stream.connect((host, port), self._on_connect)
     
     def close(self):
+        self.state = 'CLOSING'
         self.send_xml(self.CLOSE_XML)
-        #self.stream.close()
 
     def _on_close(self):
         self.state = 'CLOSED'
         logging.info('CLOSED')
         
     def _on_read(self, data):
+        if self.state is 'CLOSING':
+            return
         self.buffer.write(data)
         if data.endswith('>'):
             try:
                 data = self.buffer.getvalue()
                 root = etree.fromstring(data)
                 id = root.xpath('//iq/@id')
-                logging.info("id %r" % id)
+                logging.debug("id %r" % id)
                 if id and id[0] in self.cb_map:
                     id = id[0]
                     try:
