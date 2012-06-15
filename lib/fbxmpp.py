@@ -1,5 +1,3 @@
-from tornado import iostream
-from tornado.escape import utf8
 import socket
 import ssl
 import re
@@ -7,8 +5,11 @@ import base64
 import logging
 import urlparse
 import urllib
+
 from cStringIO import StringIO
 from lxml import etree
+from tornado import iostream, ioloop
+from tornado.escape import utf8
 
 
 class FacebookXMPP:
@@ -25,7 +26,7 @@ class FacebookXMPP:
     SESSION_XML = '<iq type="set" id="4" to="chat.facebook.com">' +\
       '<session xmlns="urn:ietf:params:xml:ns:xmpp-session"/></iq>'
     START_TLS = '<starttls xmlns="urn:ietf:params:xml:ns:xmpp-tls"/>'
-    
+
     def __init__(self, key, secret, access_token):
         self.state = 'NONE'
         self.id = 4
@@ -34,28 +35,28 @@ class FacebookXMPP:
         self.access_token = access_token
         self.cb_map = {}
         self.buffer = StringIO()
-    
+
     def get_id(self):
         self.id += 1
         return str(self.id)
-        
+
     def send_xml(self, xml):
         xml = utf8(xml)
         logging.debug('> %s' % xml)
         self.stream.write(xml)
-    
+
     def get_roster(self, callback):
         id = self.get_id()
         xml = '<iq type="get" id="%s" from="%s"><query xmlns="jabber:iq:roster"/></iq>' \
             % (id, self.jid)
         self.cb_map[id] = callback
         self.send_xml(xml)
-    
+
     def send_message(self, to, message):
         xml = '<message type="chat" from="%s" to="%s" xml:lang="en"><body>%s</body></message>' \
             % (self.jid, to, message)
         self.send_xml(xml)
-        
+
     def connect(self, host='chat.facebook.com', port=5222, callback=None):
         self.ready_callback = callback
         self.state = 'CONNECTING'
@@ -63,7 +64,7 @@ class FacebookXMPP:
         self.stream = iostream.IOStream(self.sock)
         self.stream.set_close_callback(self._on_close)
         self.stream.connect((host, port), self._on_connect)
-    
+
     def close(self):
         self.state = 'CLOSING'
         self.send_xml(self.CLOSE_XML)
@@ -71,7 +72,7 @@ class FacebookXMPP:
     def _on_close(self):
         self.state = 'CLOSED'
         logging.info('CLOSED')
-        
+
     def _on_read(self, data):
         if self.state is 'CLOSING':
             return
@@ -98,23 +99,24 @@ class FacebookXMPP:
             except:
                 logging.exception("parse failed: %.200r" % self.buffer.getvalue())
                 pass
-                
+
     def _on_connect(self):
         self.send_xml(self.STREAM_XML)
         self.send_xml(self.START_TLS)
         self.stream.read_until('proceed', self._on_start_tls)
-        
+
     def _on_start_tls(self, data):
         self.sock = ssl.wrap_socket(self.sock,
                                     do_handshake_on_connect=False,
-                                    server_side = False, 
+                                    server_side = False,
                                     ssl_version = ssl.PROTOCOL_TLSv1)
+        ioloop.IOLoop.instance().remove_handler(self.sock)
         self.stream = iostream.SSLIOStream(self.sock)
         self.stream.set_close_callback(self._on_close)
         self.send_xml(self.STREAM_XML)
         self.send_xml(self.AUTH_XML)
         self.stream.read_until('/challenge>', self._on_challenge)
-    
+
     def _on_challenge(self, data):
         match = re.match(r'.*<\s*challenge[^>]+>([^<]*)', data, re.I|re.M)
         if not match:
@@ -128,17 +130,18 @@ class FacebookXMPP:
             'call_id': 0,
             'v': '1.0'
         }
+        print params
         response = urllib.urlencode(params)
         xml = '<response xmlns="urn:ietf:params:xml:ns:xmpp-sasl">%s</response>\n' \
               % base64.b64encode(response)
         self.send_xml(xml)
         self.stream.read_until('success', self._on_challenge_success)
-        
+
     def _on_challenge_success(self, data):
         self.send_xml(self.STREAM_XML)
         self.send_xml(self.RESOURCE_XML)
         self.stream.read_until('</iq>', self._on_jid)
-    
+
     def _on_jid(self, data):
         print data
         match = re.match(r'.*<jid>([^<]*)', data, re.I|re.M)
@@ -147,13 +150,12 @@ class FacebookXMPP:
         self.jid = match.group(1)
         self.send_xml(self.SESSION_XML)
         self.stream.read_until('</iq>', self._ready)
-            
+
     def _ready(self, data):
         self.state = 'READY'
         if self.ready_callback:
             self.ready_callback()
-        
+
         def _noop(self, data):
             pass
         self.stream.read_bytes(1024*64, callback=_noop, streaming_callback=self._on_read)
-        
