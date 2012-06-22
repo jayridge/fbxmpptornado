@@ -44,6 +44,9 @@ class SendHandler(BaseHandler):
         to = self.get_argument('to')
         message = self.get_argument('message')
         access_token = self.get_argument('access_token')
+
+        to = '-{}@chat.facebook.com'.format(to)
+
         xmpp = FacebookXMPP(self.settings["facebook_api_key"],
                             self.settings["facebook_secret"],
                             access_token)
