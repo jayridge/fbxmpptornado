@@ -40,7 +40,7 @@ class IndexHandler(BaseHandler):
 
 class SendHandler(BaseHandler):
     @tornado.web.asynchronous
-    def get(self):
+    def post(self):
         to = self.get_argument('to')
         message = self.get_argument('message')
         access_token = self.get_argument('access_token')
