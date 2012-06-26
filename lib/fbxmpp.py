@@ -110,7 +110,12 @@ class FacebookXMPP:
                                     do_handshake_on_connect=False,
                                     server_side = False,
                                     ssl_version = ssl.PROTOCOL_TLSv1)
-        ioloop.IOLoop.instance().remove_handler(self.sock)
+
+        try:
+            ioloop.IOLoop.instance().remove_handler(self.sock)
+        except:
+            pass
+
         self.stream = iostream.SSLIOStream(self.sock)
         self.stream.set_close_callback(self._on_close)
         self.send_xml(self.STREAM_XML)
@@ -135,9 +140,14 @@ class FacebookXMPP:
         xml = '<response xmlns="urn:ietf:params:xml:ns:xmpp-sasl">%s</response>\n' \
               % base64.b64encode(response)
         self.send_xml(xml)
-        self.stream.read_until('success', self._on_challenge_success)
+        self.stream.read_bytes(1020, self._bytes)
+        #self.stream.read_until('success', self._on_challenge_success)
+
+    def _bytes(self, data):
+        print data
 
     def _on_challenge_success(self, data):
+        print data
         self.send_xml(self.STREAM_XML)
         self.send_xml(self.RESOURCE_XML)
         self.stream.read_until('</iq>', self._on_jid)
