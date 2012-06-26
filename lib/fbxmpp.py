@@ -140,11 +140,7 @@ class FacebookXMPP:
         xml = '<response xmlns="urn:ietf:params:xml:ns:xmpp-sasl">%s</response>\n' \
               % base64.b64encode(response)
         self.send_xml(xml)
-        self.stream.read_bytes(1020, self._bytes)
-        #self.stream.read_until('success', self._on_challenge_success)
-
-    def _bytes(self, data):
-        print data
+        self.stream.read_until('success', self._on_challenge_success)
 
     def _on_challenge_success(self, data):
         print data
